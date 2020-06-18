@@ -1,14 +1,16 @@
 // I am learning the golang, and this one is help me to improve my work profermanace.
-// Idlookup v0.1 6/16/2020
+// Idlookup v0.0.1 6/16/2020
 package main
 
 import (
 	"database/sql"
 	"fmt"
-	"io"
-	"net/http"
-	"strings"
-	"text/template"
+	"time"
+
+	//	"io"
+	//	"net/http"
+
+	//	"text/template"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -23,49 +25,117 @@ const (
 	DATABASE = "idlookup"
 )
 
-type idlookup struct {
-	id      int
-	sysid   int
-	mrpid   string
-	nsid    string
-	Custype string
-	Cusname string
+type idaccount struct {
+	ID      int    `json:"id" from:"id"`
+	Sysid   int    `json:"sysid" from:"sysid"`
+	Nsid    string `json:"nsid" from:"nsid"`
+	Mrpid   string `json:"mrpid" from:"mrpid"`
+	Cusname string `json:"Cusname" from:"Cusname"`
+	Custype string `json:"Custype" from:"Custype"`
 }
 
-var db *sql.DB
-var view *template.Template
+//var db *sql.DB
+//var view *template.Template
 
 func main() {
-
-	// 连接数据库
 	conn := fmt.Sprintf("%s:%s@%s(%s:%d)/%s", USERNAME, PASSWORD, NETWORK, SERVER, PORT, DATABASE)
-	var err error
-	db, err := sql.Open("mysql", conn)
+	DB, err := sql.Open("mysql", conn)
 	if err != nil {
-		panic(err)
+		fmt.Println("connection to mysql failed:", err)
+		return
 	}
-	defer db.Close()
+
+	DB.SetConnMaxLifetime(200 * time.Second) //最大连接周期，超时的连接就close
+	DB.SetMaxOpenConns(100)                  //设置最大连接数
+	//CreateTable(DB)
+	InsertData(DB)
+	QueryOne(DB)
+	QueryMulti(DB)
+	//UpdateData(DB)
+	//DeleteData(DB)
 
 	// 准备模板
-	err = LoadTemplate()
-	if err != nil {
-		panic(err)
-	}
+	//err = LoadTemplate()
+	//if err != nil {
+	//	panic(err)
+	//}
 
 	// 注册处理函数
-	http.HandleFunc("/load", loadHandler)
-	http.HandleFunc("/", listHandler)
-	http.HandleFunc("/idlookup", idlookupHandler)
+	//http.HandleFunc("/load", loadHandler)
+	//http.HandleFunc("/", listHandler)
+	//http.HandleFunc("/idlookup", idlookupHandler)
 
 	// 启动服务器
-	err = http.ListenAndServe(":12345", nil)
+	//err = http.ListenAndServe(":12345", nil)
+	//if err != nil {
+	//	panic(err)
+	//}
+
+}
+
+//插入数据
+func InsertData(DB *sql.DB) {
+	result, err := DB.Exec("insert INTO idaccount(Sysid,Nsid,Mrpid,Cusname,Custype) values(?,?,?,?,?)", "9829", "VC-EC9937", "5254", "2025 SOLUTIONS LTD", "CAD")
 	if err != nil {
-		panic(err)
+		fmt.Printf("Insert data failed,err:%v", err)
+		return
 	}
+	lastInsertID, err := result.LastInsertId() //获取插入数据的自增ID
+	if err != nil {
+		fmt.Printf("Get insert id failed,err:%v", err)
+		return
+	}
+	fmt.Println("Insert data id:", lastInsertID)
+
+	rowsaffected, err := result.RowsAffected() //通过RowsAffected获取受影响的行数
+	if err != nil {
+		fmt.Printf("Get RowsAffected failed,err:%v", err)
+		return
+	}
+	fmt.Println("Affected rows:", rowsaffected)
+}
+
+//查询单行
+
+func QueryOne(DB *sql.DB) {
+
+	idlook := new(idaccount) //用new()函数初始化一个结构体对象
+	row := DB.QueryRow("select ID, Sysid, Mrpid, Cusname, Custype from idaccount where id=?", 8)
+	//row.scan中的字段必须是按照数据库存入字段的顺序，否则报错
+	if err := row.Scan(&idlook.ID, &idlook.Sysid, &idlook.Mrpid, &idlook.Cusname, &idlook.Custype); err != nil {
+		fmt.Printf("scan failed, err:%v\n", err)
+		return
+	}
+	fmt.Println("Single row data:", *idlook)
+
+}
+
+//查询多行
+func QueryMulti(DB *sql.DB) {
+	idlook := new(idaccount)
+	rows, err := DB.Query("select ID, Sysid, Mrpid, Cusname, Custype from idaccount where id < ?", 10)
+	defer func() {
+		if rows != nil {
+			rows.Close()
+		}
+	}()
+	if err != nil {
+		fmt.Printf("queryMulti Query failed,err:%v\n", err)
+		return
+	}
+	for rows.Next() {
+		err = rows.Scan(&idlook.ID, &idlook.Sysid, &idlook.Mrpid, &idlook.Cusname, &idlook.Custype)
+		if err != nil {
+			fmt.Printf("queryMulti Scan failed,err:%v\n", err)
+			return
+		}
+		fmt.Print(*idlook)
+	}
+	fmt.Printf("\n")
 }
 
 // 加载模板
-func LoadTemplate() error {
+/* func LoadTemplate() error {
 	// 准备模板函数
 	funcs := make(template.FuncMap)
 	//funcs["showtime"] = ShowTime
@@ -169,3 +239,5 @@ func idlookupHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 }
+*/
+
